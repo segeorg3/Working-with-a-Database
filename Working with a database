@@ -1,0 +1,188 @@
+Public Class frmDataB
+    Dim dsComparison As DataSet
+    
+    Private Sub SaveDB()
+
+        Dim dsModified As DataSet
+
+        'cause the binding source to udpate
+        Me.bnsParts.EndEdit()
+        dsModified = Me.dsParts.GetChanges
+        'Note each apdater does the updating
+        Me.dbDAParts.Update(dsModified, "tblParts")
+        Me.dbaShips.Update(dsModified, "tblShipments")
+        Me.dsParts.AcceptChanges()
+
+    End Sub
+    
+    'Sub that is called when the main form is desired to be closed. Checks to make sure it was not an accident. 
+    Private Sub frmDB_FormClosing(ByVal sender As Object, ByVal e As System.Windows.Forms.FormClosingEventArgs) Handles Me.FormClosing
+        Me.bnsParts.EndEdit()
+        If Me.dsParts.HasChanges = True Then
+            Dim retval As Integer
+            retval = MessageBox.Show("Changes have  been made to Parts. Do you want to save?", "Changes Are Going to Be Lost", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Stop)
+            If retval = Windows.Forms.DialogResult.Yes Then
+                Call SaveDB() 'calls the sub to save the database prior to exiting
+            ElseIf retval = Windows.Forms.DialogResult.Cancel Then
+                e.Cancel = True 'will cancel out the save and exit procedure, returning to the previous window
+            End If
+        End If
+
+    End Sub
+    
+    Private Sub InitializeForm()
+        Try
+            Me.dbConnect.ConnectionString = classGlobal.connectionString
+            Me.dbConnect.Open() 'Mistake and not open database
+            
+            Me.dbDAParts.Fill(Me.dsParts, "tblParts")
+            Me.dbaShips.Fill(Me.dsParts, "tblShipments")
+
+            'Getting the colors to illustrate combo box
+            Me.dbaColors.Fill(Me.dsColors, "tblParts")
+
+            Me.mnuDB.Visible = False 'Makes the sub menu of the child invisible
+
+            'Create Two tables virtually to be the comparison operators
+            Me.dsComparison = New DataSet
+            Me.dsComparison.Tables.Add("Strings")
+            Me.dsComparison.Tables("Strings").Columns.Add("Desc")
+            Me.dsComparison.Tables("Strings").Columns.Add("Oper")
+            Dim arrVal(1) As String
+
+						'Populates a combo box with the below options (arrVal(0)). arrVal(1) is used to perform the operation.
+            arrVal(0) = "Equals"
+            arrVal(1) = "="
+            Me.dsComparison.Tables("Strings").Rows.Add(arrVal)
+            arrVal(0) = "Does Not Equal"
+            arrVal(1) = "<>"
+            Me.dsComparison.Tables("Strings").Rows.Add(arrVal)
+            arrVal(0) = "Begins With"
+            arrVal(1) = "Like"
+            Me.dsComparison.Tables("Strings").Rows.Add(arrVal)
+            arrVal(0) = "Ends With"
+            arrVal(1) = "Like"
+            Me.dsComparison.Tables("Strings").Rows.Add(arrVal)
+            arrVal(0) = "Contains"
+            arrVal(1) = "Like"
+            Me.dsComparison.Tables("Strings").Rows.Add(arrVal)
+            Me.cboOper.DataSource = Me.dsComparison.Tables("Strings")
+            Me.cboOper.DisplayMember = "Desc" 'display description
+            Me.cboOper.ValueMember = "Oper"
+
+            Me.dsComparison.Tables.Add("Numbers")
+
+            Me.dsComparison.Tables("Numbers").Columns.Add("Desc")
+            Me.dsComparison.Tables("Numbers").Columns.Add("Oper")
+            arrVal(0) = "="
+            arrVal(1) = "="
+            Me.dsComparison.Tables("Numbers").Rows.Add(arrVal)
+            arrVal(0) = "Not Equal"
+            arrVal(1) = "<>"
+            Me.dsComparison.Tables("Numbers").Rows.Add(arrVal)
+            arrVal(0) = ">"
+            arrVal(1) = ">"
+            Me.dsComparison.Tables("Numbers").Rows.Add(arrVal)
+            arrVal(0) = ">="
+            arrVal(1) = ">="
+            Me.dsComparison.Tables("Numbers").Rows.Add(arrVal)
+            arrVal(0) = "<"
+            arrVal(1) = "<"
+            Me.dsComparison.Tables("Numbers").Rows.Add(arrVal)
+            arrVal(0) = "<="
+            arrVal(1) = "<="
+            Me.dsComparison.Tables("Numbers").Rows.Add(arrVal)
+        Catch exception As System.Exception
+            Call MessageBox.Show("Error Opening Database. Please contact provider", "Error")
+            Me.Close()
+        End Try
+        
+    End Sub
+    
+    Function StringFilter(ByVal field As String, ByVal filterval As String, ByVal oper As String, ByVal opertext As String) As String
+        If oper <> "Like" Then
+            Return field & oper & classGlobal.Str2DataStr(filterval)
+        Else
+            Select Case opertext
+                Case "Begins With"
+                    Return field & oper & classGlobal.Str2DataStr(filterval & "*")
+                Case "Ends With"
+                    Return field & oper & classGlobal.Str2DataStr("*" & filterval)
+                Case "Contains"
+                    Return field & oper & classGlobal.Str2DataStr("*" & filterval & "*")
+            End Select
+        End If
+        
+    End Function
+
+    Public Sub New()
+
+        ' This call is required by the Windows Form Designer.
+        InitializeComponent()
+
+        ' Add any initialization after the InitializeComponent() call.
+        InitializeForm()
+    End Sub
+
+		'Save sub that runs when a save button is clicked
+    Private Sub mnuFileSave_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
+        Me.SaveDB()
+    End Sub
+
+		'Sub that allows the user to filter through the data within a database based off of what is desired and placed into the serach options
+    Private Sub cmdFilter_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles cmdFilter.Click
+        If Me.cboFilter.Text.Trim = "" Then
+            MessageBox.Show("Please choose a field first", "Field Missing", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Me.cboFilter.Focus()
+            Return
+        End If
+        If Me.txtFilter.Text.Trim = "" Then
+            MessageBox.Show("Please enter a filter criteria", "Filter", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Me.txtFilter.Focus()
+            Return
+        End If
+        Select Case Me.cboFilter.Text.ToLower
+            Case "weight"
+                If Information.IsNumeric(Me.txtFilter.Text) = False Then
+                    MessageBox.Show("Please enter a number when filter by weights", "Filter", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                    Me.txtFilter.Focus()
+                    Return
+                End If
+                Me.bnsParts.Filter = "Weight " & Me.cboOper.SelectedValue.ToString & Me.txtFilter.Text.Trim
+
+            Case "part number"
+                Me.bnsParts.Filter = StringFilter("[p-no]", Me.txtFilter.Text.Trim, Me.cboOper.SelectedValue.ToString, Me.cboOper.Text)
+
+            Case "part name"
+                Me.bnsParts.Filter = StringFilter("[pname]", Me.txtFilter.Text.Trim, Me.cboOper.SelectedValue.ToString, Me.cboOper.Text)
+
+            Case "city"
+                Me.bnsParts.Filter = StringFilter("[city]", Me.txtFilter.Text.Trim, Me.cboOper.SelectedValue.ToString, Me.cboOper.Text)
+
+            Case "color"
+                Me.bnsParts.Filter = StringFilter("[color]", Me.txtFilter.Text.Trim, Me.cboOper.SelectedValue.ToString, Me.cboOper.Text)
+
+        End Select
+        
+    End Sub
+		
+		'Sub that will clear the filter selection when the button is clicked
+    Private Sub mnuDBClearFilter_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles mnuDBClear.Click
+        Me.bnsParts.Filter = ""
+    End Sub
+
+    Private Sub cboFilter_SelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles cboFilter.SelectedIndexChanged
+        If Me.cboFilter.Text = "Weight" Then
+            Me.cboOper.DataSource = Me.dsComparison.Tables("Numbers")
+            Me.cboOper.Refresh()
+        Else
+            cboOper.DataSource = Me.dsComparison.Tables("Strings")
+            Me.cboOper.Refresh()
+        End If
+    End Sub
+
+    
+    Private Sub mnuFileDBSave_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles mnuFileDBSave.Click
+        Call SaveDB()
+    End Sub
+End Class
